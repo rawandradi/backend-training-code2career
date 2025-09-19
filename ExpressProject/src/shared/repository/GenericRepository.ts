@@ -31,4 +31,8 @@ export class GenericRepository<T extends { id: string }> {
 
     this.items.splice(index, 1);
   }
+
+  _reset(): void {
+  this.items = [];
+}
 }

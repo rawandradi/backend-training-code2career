@@ -1,0 +1,12 @@
+# deps & builds
+node_modules/
+dist/
+coverage/
+
+# env & logs
+.env
+*.log
+
+# editor
+.vscode/
+.DS_Store
