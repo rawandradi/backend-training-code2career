@@ -5,11 +5,18 @@ import { success } from "zod";
 import { CustomError } from "../shared/utils/exception";
 
 export class CourseController {
-    create(req: Request, res: Response, next: NextFunction) {
+    async create(req: Request, res: Response, next: NextFunction) {
         try {
             const data = createCourseSchema.parse(req.body);
             const userId = (req as any).user.id;
-            const course = courseService.createCourse(userId, data);
+            const role = (req as any).user?.role;
+
+            if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+            if (role !== "ADMIN" && role !== "COACH") {
+                return res.status(403).json({ success: false, message: "Only COACH or ADMIN can create courses" });
+            }
+
+            const course = await courseService.createCourse(userId, data);
             return res.status(200).json({ success: true, data: course });
 
         } catch (error) {
@@ -17,22 +24,22 @@ export class CourseController {
         }
     }
 
-    getAll(req: Request, res: Response, next: NextFunction) {
+    async getAll(req: Request, res: Response, next: NextFunction) {
         try {
-            const courses = courseService.getCourses();
+            const courses = await courseService.getCourses();
             return res.status(200).json({ success: true, data: courses })
         } catch (error) {
             next(error);
         }
     }
 
-    getById(req: Request, res: Response, next: NextFunction) {
+    async getById(req: Request, res: Response, next: NextFunction) {
         try {
             if (!req.params.id) {
                 throw new CustomError("Course ID is required", "COURSE", 400);
             }
-            const course = courseService.getCourseById(req.params.id);
-            return res.status(200).json({success:true,data:course});
+            const course = await courseService.getCourseById(req.params.id);
+            return res.status(200).json({ success: true, data: course });
 
         } catch (error) {
             next(error);
@@ -40,30 +47,39 @@ export class CourseController {
     }
 
 
-    update(req:Request,res:Response,next:NextFunction){
-        try{
-            const data =updateCourseSchema.parse(req.body);
+    async update(req: Request, res: Response, next: NextFunction) {
+        try {
+            const id = req.params.id;
+            if (!id) throw new CustomError("Course ID is required", "COURSE", 400);
+            const data = updateCourseSchema.parse(req.body);
             const userId = (req as any).user.id;
-             if (!req.params.id) {
+            const role = (req as any).user?.role;
+            
+            if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+            if (!req.params.id) {
                 throw new CustomError("Course ID is required", "COURSE", 400);
             }
-            const updated = courseService.updateCourse(userId,req.params.id,data);
+            const updated = await courseService.updateCourse(userId, role ,req.params.id, data);
 
-            return res.status(200).json({success:true,data:updated});
-        }catch(error){
+            return res.status(200).json({ success: true, data: updated });
+        } catch (error) {
             next(error);
         }
     }
 
-    remove(req:Request,res:Response,next:NextFunction){
-        try{
-        const userId = (req as any).user.id;
-         if (!req.params.id) {
-                throw new CustomError("Course ID is required", "COURSE", 400);
+    async remove(req: Request, res: Response, next: NextFunction) {
+        try {
+            const userId = (req as any).user.id;
+            const role = (req as any).user?.role;
+            if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+            if (!req.params.id) {
+             throw new CustomError("Course ID is required", "COURSE", 400);
             }
-        courseService.deleteCourse(userId,req.params.id);
-        return res.status(200).json({success:true,message:"Course Deleted"});
-        }catch(error){
+            await courseService.deleteCourse(userId,role ,req.params.id);
+            return res.status(200).json({ success: true, message: "Course Deleted" });
+        } catch (error) {
             next(error);
         }
     }
