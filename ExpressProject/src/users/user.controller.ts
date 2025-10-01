@@ -5,10 +5,10 @@ import { success } from "zod";
 
 
 export class UserController {
-    getMe(req: Request, res: Response, next: NextFunction) {
+    async getMe(req: Request, res: Response, next: NextFunction) {
         try {
             const userId = (req as any).user.id;
-            const profile = userService.getProfile(userId);
+            const profile = await userService.getProfile(userId);
             return res.status(200).json({ success: true, data: profile });
         } catch (error) {
             next(error);

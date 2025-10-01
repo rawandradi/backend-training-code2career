@@ -1,61 +1,74 @@
-import { v4 as uuidv4 } from "uuid";
-import { GenericRepository } from "../shared/repository/GenericRepository";
-import { Course } from "./course.types";
 import { CreateCourseDTO, UpdateCourseDTO } from "./course.dto";
 import { CustomError } from "../shared/utils/exception";
+import { prisma } from "../shared/db";
+import { Prisma } from "@prisma/client";
 
-export const courseRepo = new GenericRepository<Course>();
+const safeCourseSelect = {
+  id: true,
+  title: true,
+  description: true,
+  image: true,
+  creatorId: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.CourseSelect;
+
+type SafeCourse = Prisma.CourseGetPayload<{ select: typeof safeCourseSelect }>;
 
 export class CourseService {
-    createCourse(userId: string, data: CreateCourseDTO): Course {
-        const course: Course = {
-            id: uuidv4(),
-            title: data.title,
-            description: data.description,
-            image: data.image ?? undefined,
-            creatorId: userId,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
-        return courseRepo.create(course);
-    }
+    async createCourse(userId: string, data: CreateCourseDTO): Promise<SafeCourse> {
+        const course = await prisma.course.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        image: data.image ?? null,
+        creatorId: userId,
+      },
+      select: safeCourseSelect,
+    });
+    return course;
+  }
 
-    getCourses(): Course[] {
-        return courseRepo.findAll();
-    }
+    async getCourses(): Promise<SafeCourse[]> {
+    return prisma.course.findMany({ select: safeCourseSelect, orderBy: { createdAt: "desc" } });
+  }
 
-    getCourseById(id: string): Course {
-        const course = courseRepo.findById(id);
+    async getCourseById(id: string): Promise<SafeCourse> {
+        const course = await prisma.course.findUnique({ where: { id }, select: safeCourseSelect });
         if (!course) throw new CustomError("Course not found", "COURSE", 404);
         return course;
     }
 
-    updateCourse(userId: string, id: string, data: UpdateCourseDTO): Course {
-        const course = courseRepo.findById(id);
+    async updateCourse(userId: string,role: "ADMIN" | "COACH" | "STUDENT",id: string, data: UpdateCourseDTO): Promise<SafeCourse> {
+        const course = await prisma.course.findUnique({ where: { id } });
         if (!course) throw new CustomError("Course not found", "COURSE", 404);
-        if (course.creatorId !== userId) {
-            throw new CustomError("Forbidden", "COURSE", 403);
-        }
+        if (role !== "ADMIN" && course.creatorId !== userId) {
+      throw new CustomError("Forbidden", "COURSE", 403);}
 
-        const updateData: Partial<Course> = {
-            ...(data.title !== undefined && { title: data.title }),
-            ...(data.description !== undefined && { description: data.description }),
-            ...(data.image !== undefined && { image: data.image }),
-            updatedAt: new Date(),
-        };
 
-        return courseRepo.update(id, updateData);
+
+        const updated = await prisma.course.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.image !== undefined && { image: data.image }),
+      },
+      select: safeCourseSelect,
+    });
+
+    return updated;
     }
 
-    deleteCourse(userId: string, id: string): void {
-        const course = courseRepo.findById(id);
+    async deleteCourse(userId: string,role: "ADMIN" | "COACH" | "STUDENT", id: string): Promise<void> {
+        const course = await prisma.course.findUnique({ where: { id } });
         if (!course) throw new CustomError("Course not found", "COURSE", 404);
 
-        if (course.creatorId !== userId) {
-            throw new CustomError("Forbidden", "COURSE", 403);
-        }
+         if (role !== "ADMIN" && course.creatorId !== userId) {
+      throw new CustomError("Forbidden", "COURSE", 403);
+    }
 
-        courseRepo.delete(id);
+        await prisma.course.delete({ where: { id } });
     }
 }
 
