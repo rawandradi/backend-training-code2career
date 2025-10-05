@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { authService, AuthService } from "./auth.service";
+import { authService } from "./auth.service";
 import { registerSchema,loginSchema } from "./auth.dto";
-import { success } from "zod";
 
 
 export class AuthController{

@@ -6,47 +6,56 @@ import { ROLES } from "../shared/utils/constants";
 import { User } from "../users/user.types";
 import { userRepo } from "../users/user.repo";
 import { hashPassword, comparePassword } from "../shared/utils/utils.hash";
+import { prisma } from "../shared/prisma";
+
 
 async function seedAdmin() {
-  const exists = userRepo.findAll().find((u) => u.email === "admin@no.com");
+  const email = "admin@no.com";
+  const exists = await prisma.user.findUnique({ where: { email } });
   if (!exists) {
     const hashed = await hashPassword("admin123");
-    userRepo.create({
-      id: uuidv4(),
-      name: "Admin",
-      email: "admin@no.com",
-      password: hashed,
-      role: ROLES.ADMIN,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    await prisma.user.create({
+      data: {
+        name: "Admin",
+        email,
+        password: hashed,
+        role: ROLES.ADMIN,
+      },
     });
+    console.log("Seeded default admin (admin@no.com / admin123)");
   }
 }
 
-seedAdmin();// create admin when start the servier
+seedAdmin().catch((e) => console.error("Seed admin failed:", e));
 
 export class AuthService {
-  async register(data: RegisterDTO): Promise<User> {
-    const exists = userRepo.findAll().find((u) => u.email === data.email);
+  async register(data: RegisterDTO): Promise<Omit<User, "password">> {
+    const exists = await prisma.user.findUnique({ where: { email: data.email } });
     if (exists) throw new CustomError("Email already exists", "AUTH", 400);
 
     const hashed = await hashPassword(data.password);
 
-    const user: User = {
-      id: uuidv4(),
-      name: data.name,
-      email: data.email,
-      password: hashed,
-      role: ROLES.STUDENT,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const created = await prisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        password: hashed,
+        role: ROLES.STUDENT,
+      },
+    });
 
-    return userRepo.create(user);
+    return {
+      id: created.id,
+      name: created.name,
+      email: created.email,
+      role: created.role as User["role"],
+      createdAt: created.createdAt,
+      updatedAt: created.updatedAt,
+    };
   }
 
   async login(data: LoginDTO): Promise<{ token: string }> {
-    const user = userRepo.findAll().find((u) => u.email === data.email);
+    const user = await prisma.user.findUnique({ where: { email: data.email } });
     if (!user) throw new CustomError("Invalid credentials", "AUTH", 401);
 
     const isMatch = await comparePassword(data.password, user.password);
