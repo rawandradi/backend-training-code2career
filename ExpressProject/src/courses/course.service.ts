@@ -3,59 +3,65 @@ import { GenericRepository } from "../shared/repository/GenericRepository";
 import { Course } from "./course.types";
 import { CreateCourseDTO, UpdateCourseDTO } from "./course.dto";
 import { CustomError } from "../shared/utils/exception";
+import { prisma } from "../shared/prisma";
 
-export const courseRepo = new GenericRepository<Course>();
 
 export class CourseService {
-    createCourse(userId: string, data: CreateCourseDTO): Course {
-        const course: Course = {
-            id: uuidv4(),
-            title: data.title,
-            description: data.description,
-            image: data.image ?? undefined,
-            creatorId: userId,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
-        return courseRepo.create(course);
+    async createCourse(userId: string, data: CreateCourseDTO): Promise<Course> {
+    const created = await prisma.course.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        image: data.image ?? null,
+        creatorId: userId,
+      },
+    });
+        return created as Course;
     }
 
-    getCourses(): Course[] {
-        return courseRepo.findAll();
-    }
+    async getCourses(): Promise<Course[]> {
+    const list = await prisma.course.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+    return list as Course[];
+  }
 
-    getCourseById(id: string): Course {
-        const course = courseRepo.findById(id);
+    async getCourseById(id: string): Promise<Course> {
+    const course = await prisma.course.findUnique({ where: { id } });
+    if (!course) throw new CustomError("Course not found", "COURSE", 404);
+    return course as Course;
+  }
+
+    async updateCourse(userId: string, id: string, data: UpdateCourseDTO,role: "ADMIN"|"COACH"|"STUDENT"): Promise<Course> {
+        const course = await prisma.course.findUnique({ where: { id } });
         if (!course) throw new CustomError("Course not found", "COURSE", 404);
-        return course;
-    }
-
-    updateCourse(userId: string, id: string, data: UpdateCourseDTO): Course {
-        const course = courseRepo.findById(id);
-        if (!course) throw new CustomError("Course not found", "COURSE", 404);
-        if (course.creatorId !== userId) {
+        const isAdmin = role === "ADMIN";
+        if (!isAdmin && course.creatorId !== userId) {
             throw new CustomError("Forbidden", "COURSE", 403);
         }
 
-        const updateData: Partial<Course> = {
-            ...(data.title !== undefined && { title: data.title }),
-            ...(data.description !== undefined && { description: data.description }),
-            ...(data.image !== undefined && { image: data.image }),
-            updatedAt: new Date(),
-        };
+        const updated = await prisma.course.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.image !== undefined && { image: data.image }),
+      },
+    });
 
-        return courseRepo.update(id, updateData);
+
+        return updated as Course;
     }
 
-    deleteCourse(userId: string, id: string): void {
-        const course = courseRepo.findById(id);
+    async deleteCourse(userId: string, id: string,role: "ADMIN"|"COACH"|"STUDENT"): Promise<void> {
+        const course = await prisma.course.findUnique({ where: { id } });
         if (!course) throw new CustomError("Course not found", "COURSE", 404);
-
-        if (course.creatorId !== userId) {
+        const isAdmin = role === "ADMIN";
+        if (!isAdmin && course.creatorId !== userId) {
             throw new CustomError("Forbidden", "COURSE", 403);
         }
 
-        courseRepo.delete(id);
+        await prisma.course.delete({ where: { id } });
     }
 }
 
